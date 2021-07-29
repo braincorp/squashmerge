@@ -384,8 +384,8 @@ int run_xdelta3(struct mmap_file* patch, struct mmap_file* output,
 			exit(1);
 		}
 
-		if (execlp("xdelta3",
-					"xdelta3", "-c", "-d", "-s", input_path, 0) == -1)
+		if (execlp("cdelta",
+				   "cdelta", "merge", "-d", "delta.cdel", "-o", "file.txt", "-s", input_path, 0) == -1)
 		{
 			fprintf(stderr, "execlp() failed\n"
 					"\terrno: %s\n", strerror(errno));
