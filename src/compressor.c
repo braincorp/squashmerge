@@ -146,18 +146,95 @@ size_t compressor_compress(uint32_t c,
 		case COMP_ID_LZ4:
 #ifdef ENABLE_LZ4
 		{
-			int out_bytes;
-
+			size_t out_bytes = 0, max_dest_size = 0;
+			int method = 0;
+#ifdef LZ4HC_CLEVEL_MAX
+			//now we are calling the new lz4 library in Ubuntu 20.04, which is liblz4-1:amd64, 1.9.2-2ubuntu0.20.04.1
+			//calculate the maximal dest size base on the source size
+			max_dest_size = LZ4_compressBound( length );
+			// we allocated using a worst case guess, The actual compressed size might be less than we allocated.
+			// doing so to prevent the API from potential data overflow
+			void *dest_new = calloc(max_dest_size, 1);
 			if (c & COMP_LZ4_HC)
-				out_bytes = LZ4_compressHC_limitedOutput(src, dest, length, out_size);
+			{
+				/*
+LZ4int LZ4_compress_HC
+(
+    const char * src,
+    char * dst,
+    int srcSize,
+    int dstCapacity,
+    int compressionLevel
+)
+: Compress data from src_ into dst, using the powerful but slower "HC" algorithm. 
+`dst must be already allocated. Compression is guaranteed to succeed if dstCapacity >= LZ4_compressBound(srcSize)_ (see "lz4.h") 
+Max supported srcSize value is LZ4_MAX_INPUT_SIZE (see "lz4.h") 
+`compressionLevel : any value between 1 and LZ4HC_CLEVEL_MAX will work. Values > LZ4HC_CLEVEL_MAX behave the same as LZ4HC_CLEVEL_MAX.
+Returns: the number of bytes written into 'dst' or 0 if compression fails.
+				*/
+				out_bytes = LZ4_compress_HC(src, dest_new, length, max_dest_size, LZ4HC_CLEVEL_MAX);
+				method = 1;
+				fprintf(stderr, "20.04 LZ4_compress_HC: source size: %lu, max_dest_size: %lu, out_bytes:%lu, expected size: %lu\n", length, max_dest_size, out_bytes, out_size);
+			}
 			else
-				out_bytes = LZ4_compress_limitedOutput(src, dest, length, out_size);
+			{
+				/*
+LZ4int LZ4_compress_default
+(
+    const char * src,
+    char * dst,
+    int srcSize,
+    int dstCapacity
+)
+: Compresses 'srcSize' bytes from buffer 'src' into already allocated 'dst' buffer of size 'dstCapacity'. 
+Compression is guaranteed to succeed if 'dstCapacity' >= LZ4_compressBound(srcSize). It also runs faster, 
+so it's a recommended setting. If the function cannot compress 'src' into a more limited 'dst' budget, 
+compression stops immediately, and the function result is zero. In which case, 'dst' content is undefined (invalid). 
+srcSize : max supported value is LZ4_MAX_INPUT_SIZE. 
+dstCapacity : size of buffer 'dst' (which must be already allocated)			
+				*/
+				out_bytes = LZ4_compress_default(src, dest_new, length, max_dest_size);
+				fprintf(stderr, "20.04 LZ4_compress_default: source size: %lu, max_dest_size: %lu, out_bytes:%lu, expected size: %lu\n", length, max_dest_size, out_bytes, out_size);
+			}
+				
+			if (out_bytes <= 0)
+			{
+				fprintf(stderr, "LZ4 compression failed with method: %d, source size: %lu, allocated_size: %lu, expected_size: %lu, out_bytes:%lu\n", method, length, max_dest_size, out_size, out_bytes);
+				out_bytes = 0;
+			} 
+			else if (out_bytes > length)
+			{
+				// length is the uncompressed length
+				fprintf(stderr, "LZ4 no enough outbuffer space, failed with method: %d, source size: %lu, allocated size: %lu, expected_size: %lu, out_bytes:%lu\n", method, length, max_dest_size, out_size, out_bytes);
+				out_bytes = 0;
+			}
+			else
+			{
+				if (out_size != out_bytes)
+					fprintf(stderr, "20.04: mismatched: expected size: %lu, out_bytes: %lu\n", out_size, out_bytes);
+
+				memcpy(dest, dest_new, out_bytes);
+			}
+			free(dest_new);
+#else
+		//we are calling version liblz4-1:amd64, 0.0~r131-2ubuntu3.1 on Ubuntu 18.04 repository
+			if (c & COMP_LZ4_HC) {
+				out_bytes = LZ4_compress_HC(src, dest, length, out_size, 12);
+				method = 1;
+				fprintf(stderr, "LZ4_compress_HC: source size: %lu, out_size: %lu, out_bytes:%lu\n", length, out_size, out_bytes);
+			}
+			else
+			{
+				out_bytes = LZ4_compress_default(src, dest, length, out_size);
+				fprintf(stderr, "LZ4_compress_default: source size: %lu, out_size: %lu, out_bytes:%lu\n", length, out_size, out_bytes);
+			}
 
 			if (out_bytes <= 0)
 			{
-				fprintf(stderr, "LZ4 compression failed\n");
+				fprintf(stderr, "LZ4 compression failed with method: %d, source size: %lu, out_size: %lu, out_bytes:%lu\n", method, length, out_size, out_bytes);
 				return 0;
 			}
+#endif
 
 			return out_bytes;
 		}
@@ -167,6 +244,7 @@ size_t compressor_compress(uint32_t c,
 
 	return 0;
 }
+
 size_t compressor_decompress(uint32_t c,
 		void* dest, const void* src, size_t length, size_t out_size)
 {
