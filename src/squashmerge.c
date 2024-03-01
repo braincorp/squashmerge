@@ -29,21 +29,21 @@
 #pragma pack(push, 1)
 struct compressed_block
 {
-	uint32_t offset;
-	uint32_t length;
-	uint32_t uncompressed_length;
+	uint64_t offset;
+	uint64_t length;
+	uint64_t uncompressed_length;
 };
 
 struct sqdelta_header
 {
-	uint32_t magic;
-	uint32_t flags;
-	uint32_t compression;
-	uint32_t block_count;
+	uint64_t magic;
+	uint64_t flags;
+	uint64_t compression;
+	uint64_t block_count;
 };
 #pragma pack(pop)
 
-const uint32_t sqdelta_magic = 0x5371ceb4UL;
+const uint64_t sqdelta_magic = 0x5371ceb4UL;
 
 struct sqdelta_header read_sqdelta_header(const struct mmap_file* f,
 		size_t offset)
@@ -60,7 +60,7 @@ struct sqdelta_header read_sqdelta_header(const struct mmap_file* f,
 	if (ntohl(h->magic) != sqdelta_magic)
 	{
 		fprintf(stderr, "Incorrect magic in patch file.\n"
-				"\tmagic: %08x, expected: %08x\n",
+				"\tmagic: %016lx, expected: %016lx\n",
 				ntohl(h->magic), sqdelta_magic);
 		return out;
 	}
@@ -69,7 +69,7 @@ struct sqdelta_header read_sqdelta_header(const struct mmap_file* f,
 	if (out.flags)
 	{
 		fprintf(stderr, "Unknown flag enabled in patch file.\n"
-				"\tflags: %08x\n", ntohl(h->flags));
+				"\tflags: %016lx\n", ntohl(h->flags));
 		return out;
 	}
 
