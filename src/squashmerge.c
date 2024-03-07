@@ -309,8 +309,6 @@ int expand_input(struct sqdelta_header *dh,
 
 		if (!in_pos || !out_pos)
 			return 0;
-		fprintf(stderr, "offset (%ld) length (%ld) in_pos (%p) out_pos (%p)\n",
-				offset, length, in_pos, out_pos);
 		memcpy(out_pos, in_pos, offset - prev_offset);
 		prev_offset = offset + length;
 	}
