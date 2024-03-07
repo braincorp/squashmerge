@@ -5,7 +5,7 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#	include "config.h"
+#include "config.h"
 #endif
 
 #include <pthread.h>
@@ -20,7 +20,7 @@
 #include <arpa/inet.h> /* for endian conversion */
 
 #ifdef HAVE_STDINT_H
-#	include <stdint.h>
+#include <stdint.h>
 #endif
 
 #include "compressor.h"
@@ -29,7 +29,7 @@
 #pragma pack(push, 1)
 struct compressed_block
 {
-	uint32_t offset;
+	uint64_t offset;
 	uint32_t length;
 	uint32_t uncompressed_length;
 };
@@ -45,10 +45,12 @@ struct sqdelta_header
 
 const uint32_t sqdelta_magic = 0x5371ceb4UL;
 
-struct sqdelta_header read_sqdelta_header(const struct mmap_file* f,
-		size_t offset)
+#define ntohl(val) val
+
+struct sqdelta_header read_sqdelta_header(const struct mmap_file *f,
+										  size_t offset)
 {
-	struct sqdelta_header* h;
+	struct sqdelta_header *h;
 	struct sqdelta_header out;
 
 	out.magic = 0;
@@ -60,7 +62,7 @@ struct sqdelta_header read_sqdelta_header(const struct mmap_file* f,
 	if (ntohl(h->magic) != sqdelta_magic)
 	{
 		fprintf(stderr, "Incorrect magic in patch file.\n"
-				"\tmagic: %08x, expected: %08x\n",
+						"\tmagic: %08x, expected: %08x\n",
 				ntohl(h->magic), sqdelta_magic);
 		return out;
 	}
@@ -69,7 +71,8 @@ struct sqdelta_header read_sqdelta_header(const struct mmap_file* f,
 	if (out.flags)
 	{
 		fprintf(stderr, "Unknown flag enabled in patch file.\n"
-				"\tflags: %08x\n", ntohl(h->flags));
+						"\tflags: %08x\n",
+				ntohl(h->flags));
 		return out;
 	}
 
@@ -89,9 +92,9 @@ enum patch_format
 
 const unsigned char vcdiff_magic[3] = {0xd6, 0xc3, 0xc4};
 
-int read_patch_format(const struct mmap_file* f, size_t offset)
+int read_patch_format(const struct mmap_file *f, size_t offset)
 {
-	unsigned char* hdr;
+	unsigned char *hdr;
 
 	hdr = mmap_read(f, offset, sizeof(vcdiff_magic));
 	if (!hdr)
@@ -101,30 +104,30 @@ int read_patch_format(const struct mmap_file* f, size_t offset)
 		return PATCH_VCDIFF;
 
 	fprintf(stderr, "Unknown delta format (only vcdiff"
-			" is supported at the moment).\n");
+					" is supported at the moment).\n");
 	return PATCH_UNKNOWN;
 }
 
 struct compress_data_shared
 {
-	struct sqdelta_header* dh;
-	struct compressed_block* block_list;
-	struct mmap_file* input_f;
-	struct mmap_file* output_f;
-	size_t* prev_offset;
+	struct sqdelta_header *dh;
+	struct compressed_block *block_list;
+	struct mmap_file *input_f;
+	struct mmap_file *output_f;
+	size_t *prev_offset;
 	int thread_count;
 };
 
 struct compress_data_private
 {
-	struct compress_data_shared* shared;
+	struct compress_data_shared *shared;
 	unsigned int thread_no;
 	pthread_t thread_id;
 };
 
-int run_multithreaded(void* (*func) (void*), struct compress_data_shared* d)
+int run_multithreaded(void *(*func)(void *), struct compress_data_shared *d)
 {
-	struct compress_data_private* pd;
+	struct compress_data_private *pd;
 	int i, spawned, ret;
 
 	int num_cpus = 1;
@@ -144,7 +147,8 @@ int run_multithreaded(void* (*func) (void*), struct compress_data_shared* d)
 	if (!pd)
 	{
 		fprintf(stderr, "Unable to allocate memory for threading.\n"
-				"\terrno: %s\n", strerror(errno));
+						"\terrno: %s\n",
+				strerror(errno));
 		return 0;
 	}
 
@@ -159,7 +163,8 @@ int run_multithreaded(void* (*func) (void*), struct compress_data_shared* d)
 			if (ret != 0)
 			{
 				fprintf(stderr, "Unable to create thread %d.\n"
-						"\terror: %s\n", i, strerror(ret));
+								"\terror: %s\n",
+						i, strerror(ret));
 				break;
 			}
 		}
@@ -180,14 +185,15 @@ int run_multithreaded(void* (*func) (void*), struct compress_data_shared* d)
 			cret = pthread_cancel(pd[i].thread_id);
 			if (cret != 0)
 				fprintf(stderr, "Warning: unable to cancel thread %d.\n"
-						"\terror: %s\n", i, strerror(cret));
+								"\terror: %s\n",
+						i, strerror(cret));
 		}
 	}
 
 	for (i = 0; i < spawned; ++i)
 	{
 		int jret;
-		void* res;
+		void *res;
 
 		if (i == num_cpus - 1)
 			break;
@@ -196,7 +202,8 @@ int run_multithreaded(void* (*func) (void*), struct compress_data_shared* d)
 		if (jret != 0)
 		{
 			fprintf(stderr, "Warning: unable to join thread %d.\n"
-					"\terror: %s\n", i, strerror(jret));
+							"\terror: %s\n",
+					i, strerror(jret));
 		}
 
 		if (!res)
@@ -208,17 +215,18 @@ int run_multithreaded(void* (*func) (void*), struct compress_data_shared* d)
 	return !ret;
 }
 
-void* decompress_blocks(void* data)
+void *decompress_blocks(void *data)
 {
-	struct compress_data_private* pd = data;
+	struct compress_data_private *pd = data;
 
-	struct sqdelta_header* dh = pd->shared->dh;
-	struct compressed_block* source_blocks = pd->shared->block_list;
-	struct mmap_file* source_f = pd->shared->input_f;
-	struct mmap_file* temp_source_f = pd->shared->output_f;
+	struct sqdelta_header *dh = pd->shared->dh;
+	struct compressed_block *source_blocks = pd->shared->block_list;
+	struct mmap_file *source_f = pd->shared->input_f;
+	struct mmap_file *temp_source_f = pd->shared->output_f;
 	size_t prev_offset = *pd->shared->prev_offset;
 	unsigned int id = pd->thread_no;
 	int no_threads = pd->shared->thread_count;
+	fprintf(stderr, "Starting decompress_blocks %d\n", id);
 
 	size_t i;
 
@@ -232,24 +240,24 @@ void* decompress_blocks(void* data)
 			size_t length = ntohl(source_blocks[i].length);
 			size_t ret;
 
-			void* in_pos = mmap_read(source_f, offset, length);
-			void* out_pos = mmap_read(temp_source_f,
-					prev_offset, unc_length);
+			void *in_pos = mmap_read(source_f, offset, length);
+			void *out_pos = mmap_read(temp_source_f,
+									  prev_offset, unc_length);
 
 			if (!in_pos || !out_pos)
 				return 0;
 
 			ret = compressor_decompress(dh->compression,
-					out_pos, in_pos, length, unc_length);
+										out_pos, in_pos, length, unc_length);
 
 			if (ret != unc_length)
 			{
 				if (ret != 0)
 					fprintf(stderr, "Block decompression resulted in different size.\n"
-							"\toffset: 0x%08lx\n"
-							"\tlength: %lu\n"
-							"\texpected unpacked length: %lu\n"
-							"\treal unpacked length: %lu\n",
+									"\toffset: 0x%08lx\n"
+									"\tlength: %lu\n"
+									"\texpected unpacked length: %lu\n"
+									"\treal unpacked length: %lu\n",
 							offset, length, unc_length, ret);
 
 				return 0;
@@ -261,16 +269,18 @@ void* decompress_blocks(void* data)
 
 	if (id == 0)
 		*pd->shared->prev_offset = prev_offset;
+	fprintf(stderr, "Finishing decompress_blocks %d\n", id);
 
 	return pd;
 }
 
-int expand_input(struct sqdelta_header* dh,
-		struct compressed_block* source_blocks,
-		struct mmap_file* source_f,
-		struct mmap_file* patch_f,
-		struct mmap_file* temp_source_f)
+int expand_input(struct sqdelta_header *dh,
+				 struct compressed_block *source_blocks,
+				 struct mmap_file *source_f,
+				 struct mmap_file *patch_f,
+				 struct mmap_file *temp_source_f)
 {
+	fprintf(stderr, "Starting expand_input\n");
 	size_t prev_offset = 0;
 	size_t i;
 
@@ -279,24 +289,26 @@ int expand_input(struct sqdelta_header* dh,
 		size_t offset = ntohl(source_blocks[i].offset);
 		size_t length = ntohl(source_blocks[i].length);
 
-		void* in_pos = mmap_read(source_f, prev_offset,
-				offset - prev_offset);
-		void* out_pos = mmap_read(temp_source_f,
-				prev_offset, offset - prev_offset);
+		void *in_pos = mmap_read(source_f, prev_offset,
+								 offset - prev_offset);
+		void *out_pos = mmap_read(temp_source_f,
+								  prev_offset, offset - prev_offset);
 
 		if (!in_pos || !out_pos)
 			return 0;
-
+		fprintf(stderr, "offset (%ld) length (%ld) in_pos (%p) out_pos (%p)\n",
+				offset, length, in_pos, out_pos);
 		memcpy(out_pos, in_pos, offset - prev_offset);
 		prev_offset = offset + length;
 	}
+	fprintf(stderr, "Last Block\n");
 
 	/* the last block */
 	{
-		void* in_pos = mmap_read(source_f, prev_offset,
-				source_f->length - prev_offset);
-		void* out_pos = mmap_read(temp_source_f,
-				prev_offset, source_f->length - prev_offset);
+		void *in_pos = mmap_read(source_f, prev_offset,
+								 source_f->length - prev_offset);
+		void *out_pos = mmap_read(temp_source_f,
+								  prev_offset, source_f->length - prev_offset);
 
 		if (!in_pos || !out_pos)
 			return 0;
@@ -306,6 +318,7 @@ int expand_input(struct sqdelta_header* dh,
 
 	prev_offset = source_f->length;
 
+	fprintf(stderr, "Decompress blocks\n");
 	{
 		struct compress_data_shared d;
 
@@ -319,14 +332,15 @@ int expand_input(struct sqdelta_header* dh,
 			return 0;
 	}
 
+	fprintf(stderr, "Copy block lists\n");
 	/* copy the block lists and the header */
 	{
 		size_t block_list_size = sizeof(*source_blocks) * dh->block_count;
 
-		void* in_pos = mmap_read(patch_f, sizeof(*dh),
-				block_list_size);
-		void* out_pos = mmap_read(temp_source_f,
-				prev_offset, block_list_size);
+		void *in_pos = mmap_read(patch_f, sizeof(*dh),
+								 block_list_size);
+		void *out_pos = mmap_read(temp_source_f,
+								  prev_offset, block_list_size);
 		if (!in_pos || !out_pos)
 			return 0;
 
@@ -339,19 +353,22 @@ int expand_input(struct sqdelta_header* dh,
 			return 0;
 		memcpy(out_pos, in_pos, sizeof(*dh));
 	}
+	fprintf(stderr, "Finishing expand_input\n");
 
 	return 1;
 }
 
-int run_xdelta3(struct mmap_file* patch, struct mmap_file* output,
-		const char* input_path)
+int run_xdelta3(struct mmap_file *patch, struct mmap_file *output,
+				const char *input_path)
 {
+	fprintf(stderr, "Starting run_xdelta3\n");
 	pid_t child_pid = fork();
 
 	if (child_pid == -1)
 	{
 		fprintf(stderr, "fork() failed\n"
-				"\terrno: %s\n", strerror(errno));
+						"\terrno: %s\n",
+				strerror(errno));
 		return 0;
 	}
 
@@ -361,34 +378,39 @@ int run_xdelta3(struct mmap_file* patch, struct mmap_file* output,
 		if (close(0) == -1)
 		{
 			fprintf(stderr, "Unable to close stdin in child\n"
-					"\terrno: %s\n", strerror(errno));
+							"\terrno: %s\n",
+					strerror(errno));
 			exit(1);
 		}
 		if (close(1) == -1)
 		{
 			fprintf(stderr, "Unable to close stdout in child\n"
-					"\terrno: %s\n", strerror(errno));
+							"\terrno: %s\n",
+					strerror(errno));
 			exit(1);
 		}
 
 		if (dup2(patch->fd, 0) == -1)
 		{
 			fprintf(stderr, "Unable to dup2() patch file into stdin\n"
-					"\terrno: %s\n", strerror(errno));
+							"\terrno: %s\n",
+					strerror(errno));
 			exit(1);
 		}
 		if (dup2(output->fd, 1) == -1)
 		{
 			fprintf(stderr, "Unable to dup2() output file into stdout\n"
-					"\terrno: %s\n", strerror(errno));
+							"\terrno: %s\n",
+					strerror(errno));
 			exit(1);
 		}
 
 		if (execlp("xdelta3",
-					"xdelta3", "-c", "-d", "-s", input_path, 0) == -1)
+				   "xdelta3", "-c", "-d", "-s", input_path, 0) == -1)
 		{
 			fprintf(stderr, "execlp() failed\n"
-					"\terrno: %s\n", strerror(errno));
+							"\terrno: %s\n",
+					strerror(errno));
 			exit(1);
 		}
 	}
@@ -400,24 +422,27 @@ int run_xdelta3(struct mmap_file* patch, struct mmap_file* output,
 		if (WEXITSTATUS(ret) != 0)
 		{
 			fprintf(stderr, "Child exited with non-success status\n"
-					"\texit status: %d\n", WEXITSTATUS(ret));
+							"\texit status: %d\n",
+					WEXITSTATUS(ret));
 			return 0;
 		}
+		fprintf(stderr, "Finishing run_xdelta3\n");
 	}
 
 	return 1;
 }
 
-void* compress_blocks(void* data)
+void *compress_blocks(void *data)
 {
-	struct compress_data_private* pd = data;
+	struct compress_data_private *pd = data;
 
-	struct sqdelta_header* dh = pd->shared->dh;
-	struct compressed_block* target_blocks = pd->shared->block_list;
-	struct mmap_file* target_f = pd->shared->output_f;
+	struct sqdelta_header *dh = pd->shared->dh;
+	struct compressed_block *target_blocks = pd->shared->block_list;
+	struct mmap_file *target_f = pd->shared->output_f;
 	size_t prev_offset = *pd->shared->prev_offset;
 	unsigned int id = pd->thread_no;
 	int no_threads = pd->shared->thread_count;
+	fprintf(stderr, "Starting compress_blocks %d\n", id);
 
 	size_t i;
 
@@ -433,24 +458,24 @@ void* compress_blocks(void* data)
 			size_t length = ntohl(target_blocks[i - 1].length);
 			size_t ret;
 
-			void* in_pos;
-			void* out_pos = mmap_read(target_f, offset, length);
+			void *in_pos;
+			void *out_pos = mmap_read(target_f, offset, length);
 
 			in_pos = mmap_read(target_f, prev_offset, unc_length);
 			if (!in_pos || !out_pos)
 				return 0;
 
 			ret = compressor_compress(dh->compression,
-					out_pos, in_pos, unc_length, length);
+									  out_pos, in_pos, unc_length, length);
 
 			if (ret != length)
 			{
 				if (ret != 0)
 					fprintf(stderr, "Block re-compression resulted in different size.\n"
-							"\toffset: 0x%08lx\n"
-							"\tinput length: %lu\n"
-							"\texpected packed length: %lu\n"
-							"\treal packed length: %lu\n",
+									"\toffset: 0x%08lx\n"
+									"\tinput length: %lu\n"
+									"\texpected packed length: %lu\n"
+									"\treal packed length: %lu\n",
 							offset, unc_length, length, ret);
 
 				return 0;
@@ -460,15 +485,16 @@ void* compress_blocks(void* data)
 
 	if (id == 0)
 		*pd->shared->prev_offset = prev_offset;
+	fprintf(stderr, "Finishing compress_blocks %d\n", id);
 
 	return pd;
 }
 
-int squash_target_file(struct mmap_file* target_f)
+int squash_target_file(struct mmap_file *target_f)
 {
 	struct sqdelta_header dh;
 	size_t block_list_size, block_list_offset;
-	struct compressed_block* target_blocks;
+	struct compressed_block *target_blocks;
 	size_t prev_offset;
 
 	dh = read_sqdelta_header(target_f, target_f->length - sizeof(dh));
@@ -479,7 +505,7 @@ int squash_target_file(struct mmap_file* target_f)
 	block_list_offset = target_f->length - sizeof(dh) - block_list_size;
 
 	target_blocks = mmap_read(target_f, block_list_offset,
-			block_list_size);
+							  block_list_size);
 	if (!target_blocks)
 		return 0;
 
@@ -501,18 +527,19 @@ int squash_target_file(struct mmap_file* target_f)
 	if (ftruncate(target_f->fd, prev_offset) == -1)
 	{
 		fprintf(stderr, "Unable to truncate output file.\n"
-				"\terrno: %s\n", strerror(errno));
+						"\terrno: %s\n",
+				strerror(errno));
 		return 0;
 	}
 
 	return 1;
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
-	const char* source_file;
-	const char* patch_file;
-	const char* target_file;
+	const char *source_file;
+	const char *patch_file;
+	const char *target_file;
 
 	struct mmap_file source_f;
 	struct mmap_file patch_f;
@@ -543,7 +570,7 @@ int main(int argc, char* argv[])
 
 		do
 		{
-			struct compressed_block* source_blocks;
+			struct compressed_block *source_blocks;
 			char tmp_name_buf[] = "tmp.XXXXXX";
 			size_t tmp_length = 0;
 			size_t block_list_size;
@@ -555,12 +582,12 @@ int main(int argc, char* argv[])
 
 			block_list_size = sizeof(*source_blocks) * dh.block_count;
 			source_blocks = mmap_read(&patch_f, sizeof(dh),
-					block_list_size);
+									  block_list_size);
 			if (!source_blocks)
 				break;
 
 			pformat = read_patch_format(&patch_f,
-					sizeof(dh) + block_list_size);
+										sizeof(dh) + block_list_size);
 			if (pformat == PATCH_UNKNOWN)
 				break;
 
@@ -574,7 +601,7 @@ int main(int argc, char* argv[])
 				size_t i;
 
 				{
-					const char* tmpdir = getenv("TMPDIR");
+					const char *tmpdir = getenv("TMPDIR");
 #ifdef _P_tmpdir
 					if (!tmpdir)
 						tmpdir = P_tmpdir;
@@ -585,8 +612,9 @@ int main(int argc, char* argv[])
 					if (chdir(tmpdir) == -1)
 					{
 						fprintf(stderr, "Unable to enter temporary directory.\n"
-								"\tpath: %s\n"
-								"\terrno: %s\n", tmpdir, strerror(errno));
+										"\tpath: %s\n"
+										"\terrno: %s\n",
+								tmpdir, strerror(errno));
 						break;
 					}
 				}
@@ -608,28 +636,29 @@ int main(int argc, char* argv[])
 					int patch_ret;
 
 					if (!expand_input(&dh, source_blocks,
-								&source_f, &patch_f, &temp_source_f))
+									  &source_f, &patch_f, &temp_source_f))
 						break;
 
 					mmap_close(&temp_source_f);
 
 					if (lseek(patch_f.fd, sizeof(dh) + block_list_size,
-								SEEK_SET) == -1)
+							  SEEK_SET) == -1)
 					{
 						fprintf(stderr, "Unable to seek patch file for applying.\n"
-								"\terrno: %s\n", strerror(errno));
+										"\terrno: %s\n",
+								strerror(errno));
 						break;
 					}
 
 					/* run patcher to obtain the expanded target file */
 					switch (pformat)
 					{
-						case PATCH_VCDIFF:
-							patch_ret = run_xdelta3(&patch_f, &target_f, tmp_name_buf);
-							break;
-						case PATCH_UNKNOWN:
-							/* not reached */
-							patch_ret = 0;
+					case PATCH_VCDIFF:
+						patch_ret = run_xdelta3(&patch_f, &target_f, tmp_name_buf);
+						break;
+					case PATCH_UNKNOWN:
+						/* not reached */
+						patch_ret = 0;
 					}
 
 					if (!patch_ret)
