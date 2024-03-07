@@ -45,7 +45,23 @@ struct sqdelta_header
 
 const uint32_t sqdelta_magic = 0x5371ceb4UL;
 
-#define ntohl(val) val
+#ifndef ntohll
+uint64_t ntohll(uint64_t netlonglong)
+{
+	// Check system endianness
+	static const int one = 1;
+	if (*(const char *)&one == 1)
+	{ // Little endian
+		// Perform byte swap
+		return ((uint64_t)ntohl((uint32_t)(netlonglong & 0xFFFFFFFF)) << 32) | ntohl((uint32_t)(netlonglong >> 32));
+	}
+	else
+	{
+		// Big endian - no need to swap bytes
+		return netlonglong;
+	}
+}
+#endif
 
 struct sqdelta_header read_sqdelta_header(const struct mmap_file *f,
 										  size_t offset)
@@ -226,7 +242,6 @@ void *decompress_blocks(void *data)
 	size_t prev_offset = *pd->shared->prev_offset;
 	unsigned int id = pd->thread_no;
 	int no_threads = pd->shared->thread_count;
-	fprintf(stderr, "Starting decompress_blocks %d\n", id);
 
 	size_t i;
 
@@ -236,7 +251,7 @@ void *decompress_blocks(void *data)
 
 		if (i % no_threads == id)
 		{
-			size_t offset = ntohl(source_blocks[i].offset);
+			size_t offset = ntohll(source_blocks[i].offset);
 			size_t length = ntohl(source_blocks[i].length);
 			size_t ret;
 
@@ -269,7 +284,6 @@ void *decompress_blocks(void *data)
 
 	if (id == 0)
 		*pd->shared->prev_offset = prev_offset;
-	fprintf(stderr, "Finishing decompress_blocks %d\n", id);
 
 	return pd;
 }
@@ -280,13 +294,12 @@ int expand_input(struct sqdelta_header *dh,
 				 struct mmap_file *patch_f,
 				 struct mmap_file *temp_source_f)
 {
-	fprintf(stderr, "Starting expand_input\n");
 	size_t prev_offset = 0;
 	size_t i;
 
 	for (i = 0; i < dh->block_count; ++i)
 	{
-		size_t offset = ntohl(source_blocks[i].offset);
+		size_t offset = ntohll(source_blocks[i].offset);
 		size_t length = ntohl(source_blocks[i].length);
 
 		void *in_pos = mmap_read(source_f, prev_offset,
@@ -301,7 +314,6 @@ int expand_input(struct sqdelta_header *dh,
 		memcpy(out_pos, in_pos, offset - prev_offset);
 		prev_offset = offset + length;
 	}
-	fprintf(stderr, "Last Block\n");
 
 	/* the last block */
 	{
@@ -318,7 +330,6 @@ int expand_input(struct sqdelta_header *dh,
 
 	prev_offset = source_f->length;
 
-	fprintf(stderr, "Decompress blocks\n");
 	{
 		struct compress_data_shared d;
 
@@ -332,7 +343,6 @@ int expand_input(struct sqdelta_header *dh,
 			return 0;
 	}
 
-	fprintf(stderr, "Copy block lists\n");
 	/* copy the block lists and the header */
 	{
 		size_t block_list_size = sizeof(*source_blocks) * dh->block_count;
@@ -353,7 +363,6 @@ int expand_input(struct sqdelta_header *dh,
 			return 0;
 		memcpy(out_pos, in_pos, sizeof(*dh));
 	}
-	fprintf(stderr, "Finishing expand_input\n");
 
 	return 1;
 }
@@ -361,7 +370,6 @@ int expand_input(struct sqdelta_header *dh,
 int run_xdelta3(struct mmap_file *patch, struct mmap_file *output,
 				const char *input_path)
 {
-	fprintf(stderr, "Starting run_xdelta3\n");
 	pid_t child_pid = fork();
 
 	if (child_pid == -1)
@@ -426,7 +434,6 @@ int run_xdelta3(struct mmap_file *patch, struct mmap_file *output,
 					WEXITSTATUS(ret));
 			return 0;
 		}
-		fprintf(stderr, "Finishing run_xdelta3\n");
 	}
 
 	return 1;
@@ -442,7 +449,6 @@ void *compress_blocks(void *data)
 	size_t prev_offset = *pd->shared->prev_offset;
 	unsigned int id = pd->thread_no;
 	int no_threads = pd->shared->thread_count;
-	fprintf(stderr, "Starting compress_blocks %d\n", id);
 
 	size_t i;
 
@@ -454,7 +460,7 @@ void *compress_blocks(void *data)
 
 		if (i % no_threads == id)
 		{
-			size_t offset = ntohl(target_blocks[i - 1].offset);
+			size_t offset = ntohll(target_blocks[i - 1].offset);
 			size_t length = ntohl(target_blocks[i - 1].length);
 			size_t ret;
 
@@ -485,7 +491,6 @@ void *compress_blocks(void *data)
 
 	if (id == 0)
 		*pd->shared->prev_offset = prev_offset;
-	fprintf(stderr, "Finishing compress_blocks %d\n", id);
 
 	return pd;
 }
