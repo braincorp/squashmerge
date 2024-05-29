@@ -53,6 +53,15 @@ struct sqdelta_header
 
 const uint32_t sqdelta_magic = 0x5371ceb4UL;
 
+/**
+ * @brief Convert a 64-bit integer from network byte order to host.
+ *
+ * This function converts a 64-bit integer from network byte order to host byte order.
+ * It performs a byte swap if the system is little-endian.
+ *
+ * @param hostlonglong The 64-bit integer in network byte order.
+ * @return The 64-bit integer in host byte order.
+ */
 #ifndef ntohll
 uint64_t ntohll(uint64_t netlonglong)
 {
