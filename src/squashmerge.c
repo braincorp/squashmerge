@@ -27,6 +27,11 @@
 #include "util.h"
 
 #pragma pack(push, 1)
+/**
+ * On-disk representation of a compressed block.
+ *
+ * Integers are stored in network byte order (big-endian).
+ */
 struct compressed_block
 {
 	uint64_t offset;
@@ -34,6 +39,9 @@ struct compressed_block
 	uint32_t uncompressed_length;
 };
 
+/**
+ * On-disk representation of a squashdelta file header.
+ */
 struct sqdelta_header
 {
 	uint32_t magic;
