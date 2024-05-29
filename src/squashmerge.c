@@ -125,6 +125,19 @@ enum patch_format
 
 const unsigned char vcdiff_magic[3] = {0xd6, 0xc3, 0xc4};
 
+/**
+ * @brief Reads the patch format from a given file and offset.
+ *
+ * This function reads the patch format from a given file and offset. It checks
+ * if the header at the given offset matches the vcdiff_magic. If it does, it
+ * returns PATCH_VCDIFF. If the header is not found or does not match the
+ * vcdiff_magic, it prints an error message and returns PATCH_UNKNOWN.
+ *
+ * @param f Pointer to the mmap_file structure representing the file to read from.
+ * @param offset The offset in the file where the patch format is expected to be found.
+ * @return The patch format. This will be PATCH_VCDIFF if the header at the
+ *     given offset matches the vcdiff_magic, and PATCH_UNKNOWN otherwise.
+ */
 int read_patch_format(const struct mmap_file *f, size_t offset)
 {
 	unsigned char *hdr;
@@ -305,6 +318,26 @@ void *decompress_blocks(void *data)
 	return pd;
 }
 
+/**
+ * @brief Expands the input file by decompressing the blocks and copying the
+ * block lists and the header.
+ *
+ * This function expands the input file by decompressing the blocks and copying
+ * the block lists and the header. It reads the blocks from the source file and
+ * the patch file, decompresses them, and writes them to the temporary source
+ * file. It also copies the block lists and the header from the patch file to
+ * the temporary source file.
+ *
+ * @param dh Pointer to the sqdelta_header structure representing the header of
+ *     the squashdelta file.
+ * @param source_blocks Pointer to the array of compressed_block structures
+ *     representing the blocks in the source file.
+ * @param source_f Pointer to the mmap_file structure representing the source file.
+ * @param patch_f Pointer to the mmap_file structure representing the patch file.
+ * @param temp_source_f Pointer to the mmap_file structure representing the
+ *     temporary source file.
+ * @return 1 if the operation was successful, and 0 otherwise.
+ */
 int expand_input(struct sqdelta_header *dh,
 				 struct compressed_block *source_blocks,
 				 struct mmap_file *source_f,
@@ -314,6 +347,7 @@ int expand_input(struct sqdelta_header *dh,
 	size_t prev_offset = 0;
 	size_t i;
 
+	/* copy each block from source_f to temp_source_f */
 	for (i = 0; i < dh->block_count; ++i)
 	{
 		size_t offset = ntohll(source_blocks[i].offset);
