@@ -463,7 +463,7 @@ int run_xdelta3(struct mmap_file *patch, struct mmap_file *output,
 		}
 
 		if (execlp("xdelta3",
-				   "xdelta3", "-c", "-d", "-s", input_path, 0) == -1)
+				   "xdelta3", "-c", "-d", "-s", input_path, NULL) == -1)
 		{
 			fprintf(stderr, "execlp() failed\n"
 							"\terrno: %s\n",
