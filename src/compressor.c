@@ -9,6 +9,8 @@
 #endif
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef ENABLE_LZO
 #	include <lzo/lzo1x.h>
